@@ -25,4 +25,7 @@
 - (void)enqueueOperation:(NSOperation*)op;
 
 - (void)fetchFruits;
+-(void)initModels:(NSDictionary *)directionary;
+-(void)initModelsWithCacheDic;
+-(BOOL)updateCache:(NSDictionary *)directionary;
 @end

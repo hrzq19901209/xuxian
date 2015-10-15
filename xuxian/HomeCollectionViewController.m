@@ -19,16 +19,16 @@
 #import "FruitAds.h"
 #import "Fruit.h"
 #import "UIImageView+PINRemoteImage.h"
-@interface HomeCollectionViewController()<WMAdPageViewDelegate>{
-    NSMutableArray *sections;
-}
+#import "MJRefresh.h"
+#import "Reachability.h"
+#import "LOLErrorNetWorkView.h"
+
+@interface HomeCollectionViewController()<WMAdPageViewDelegate>
 
 @property (nonatomic,strong) IBOutlet UIView *homeNavigationBar;
 @property (nonatomic,weak) IBOutlet UILabel *shopAddressLabel;
 @property (nonatomic,weak) IBOutlet UILabel *subShopAddresslabel;
-@property NSMutableArray *arrImg;
-@property (retain) NSMutableArray *arrName;
-@property NSInteger adSum;
+
 @end
 
 @implementation HomeCollectionViewController
@@ -38,9 +38,9 @@ static NSString * const reuseIdentifier = @"CollectionCell";
 
 -(id)initWithCollectionViewLayout:(nonnull UICollectionViewLayout *)layout{
     self = [super initWithCollectionViewLayout:layout];
+
     return self;
 }
-
 -(void)viewDidLoad{
     [super viewDidLoad];
     
@@ -60,8 +60,28 @@ static NSString * const reuseIdentifier = @"CollectionCell";
                                                  name:kFruitsErrorNotification
                                                object:nil];
     
-    // fetch top stories
-    [[Model sharedModel] fetchFruits];
+    //加载缓存
+    [[Model sharedModel] initModelsWithCacheDic];
+    [self initAdsView];
+    //先检测网络，如果网络不可用，则显示网络不可用，如果网络可用则撤销网络不可用的标志
+    Reachability* reach = [Reachability reachabilityWithHostname:@"192.168.11.3"];
+    if (![reach isReachable]) {
+        LOLErrorNetWorkView *view = [[LOLErrorNetWorkView alloc] initWithFrame:CGRectMake(0, self.navigationController.navigationBar.frame.size.height+20, screen_width,60)];
+        [self.view addSubview:view];
+        CGRect frame = self.collectionView.frame;
+        CGRect newframe = CGRectMake(0, frame.origin.y+60, frame.size.width, frame.size.height);
+        self.collectionView.frame = newframe;
+    }else{
+        NSLog(@"网络可用！");
+    }
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(reachabilityChanged:)
+                                                 name:kReachabilityChangedNotification
+                                               object:nil];
+    [reach startNotifier];
+
+    self.collectionView.header = [MJRefreshNormalHeader headerWithRefreshingTarget:self refreshingAction:@selector(refreshData)];
+    [self.collectionView.header beginRefreshing];
     
     UINib *nib = [UINib nibWithNibName:@"CollectionViewCell" bundle:nil];
     [self.collectionView registerNib:nib forCellWithReuseIdentifier:reuseIdentifier];
@@ -71,8 +91,6 @@ static NSString * const reuseIdentifier = @"CollectionCell";
     
     self.collectionView.backgroundColor = [UIColor colorWithHexString:@"F8F9F2"];
     self.collectionView.showsVerticalScrollIndicator = NO;
-    
-    
     
     UINavigationItem *navItem = self.navigationItem;
     
@@ -89,8 +107,6 @@ static NSString * const reuseIdentifier = @"CollectionCell";
                                                                 target:self
                                                                 action:@selector(test)];
     navItem.rightBarButtonItem = rightBBI;
-    
-    
 }
 
 -(void)didRotateFromInterfaceOrientation:(UIInterfaceOrientation)fromInterfaceOrientation{
@@ -166,6 +182,39 @@ static NSString * const reuseIdentifier = @"CollectionCell";
 }
 
 - (void)handleFetchFruitsSuccess:(id)notification {
+    [self initAdsView];
+    
+    [self.collectionView reloadData];
+    [self.collectionView.header endRefreshing];
+}
+
+- (void)handleFetchFruitsError:(id)notification {
+    [self.collectionView.header endRefreshing];
+}
+-(void)refreshData{
+    [[Model sharedModel] fetchFruits];
+}
+-(void)reachabilityChanged:(NSNotification *)note{
+    Reachability *reach = [note object];
+    if (![reach isReachable]) {
+        LOLErrorNetWorkView *view = [[LOLErrorNetWorkView alloc] initWithFrame:CGRectMake(0, self.navigationController.navigationBar.frame.size.height+20, screen_width,60)];
+        [self.view addSubview:view];
+        CGRect frame = self.collectionView.frame;
+        CGRect newframe = CGRectMake(0, frame.origin.y+60, frame.size.width, frame.size.height);
+        self.collectionView.frame = newframe;
+        return;
+    }
+    for (UIView *subviews in [self.view subviews]) {
+        if (subviews.tag== tag) {
+            [subviews removeFromSuperview];
+        }
+    }
+    CGRect frame = self.collectionView.frame;
+    CGRect newframe = CGRectMake(0, frame.origin.y-60, frame.size.width, frame.size.height);
+    self.collectionView.frame = newframe;
+    NSLog(@"网络可用！");
+}
+-(void)initAdsView{
     WMAdPageView *adPageView = [[WMAdPageView alloc] initWithFrame:CGRectMake(0, 0, screen_width, 150)];
     NSMutableArray *arrImageUrl = [NSMutableArray array];
     for (FruitAds* ad in [Model sharedModel].ads) {
@@ -174,9 +223,5 @@ static NSString * const reuseIdentifier = @"CollectionCell";
     [adPageView  setAdsWithImages:arrImageUrl delegate:self];
     [adPageView  setBAutoRoll:YES];
     [self.collectionView addSubview:adPageView];
-    [self.collectionView reloadData];
-}
-
-- (void)handleFetchFruitsError:(id)notification {
 }
 @end

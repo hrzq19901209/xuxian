@@ -9,5 +9,4 @@
 #import <UIKit/UIKit.h>
 
 @interface TestTableViewController : UIViewController
-@property NSMutableArray *array;
 @end

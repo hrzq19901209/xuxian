@@ -10,7 +10,7 @@
 #import "Fruit.h"
 #import "FruitAds.h"
 
-#define kURL @"http://192.168.11.4/xuxian/feed/feed.json"
+#define kURL @"http://192.168.11.3/xuxian/feed/feeddd.json"
 
 @implementation FetchFruitsOperation
 
@@ -18,45 +18,35 @@
     [self postNotification:kFruitsStartNotification];
     
     NSURL *url = [NSURL URLWithString:kURL];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.timeoutInterval = 5;
+    
+    NSHTTPURLResponse *response = nil;
     NSError *error = nil;
-    NSURLRequest *request = [NSURLRequest requestWithURL:url];
     NSData *data = [NSURLConnection sendSynchronousRequest:request
-                                         returningResponse:nil
-                                                     error:nil];
-    NSDictionary *directionary = [NSJSONSerialization JSONObjectWithData:data
-                                                            options:NSJSONReadingMutableLeaves
-                                                              error:&error];
-    NSArray *dAds = [directionary objectForKey:@"advertisement"];
-    NSDictionary *dFruits = [directionary objectForKey:@"fruits"];
-    
-    NSMutableArray *fruits = [NSMutableArray array];
-    NSMutableArray *ads = [NSMutableArray array];
-    NSMutableArray *sections = [NSMutableArray array];
-    
-    NSArray *categories = [dFruits allKeys];
-    for (id category in categories) {
-        [sections addObject:category];
-        NSArray *items = [dFruits objectForKey:category];
-        NSMutableArray *fruitsInCategory = [NSMutableArray array];
-        for (NSDictionary *item in items) {
-            Fruit *fruit = [[Fruit alloc] init];
-            [fruit setName:[item objectForKey:@"name"]];
-            [fruit setIntroduction:[item objectForKey:@"introduction"]];
-            [fruit setImageUrl:[item objectForKey:@"imageUrl"]];
-            [fruitsInCategory addObject:fruit];
+                                         returningResponse:&response
+                                                     error:&error];
+    if (error) {
+        switch (error.code) {
+            case kCFURLErrorCannotConnectToHost:
+                NSLog(@"无法路由到主机");
+                break;
+            case kCFURLErrorTimedOut:
+                NSLog(@"请求超时");
+                break;
+            default:
+                NSLog(@"其他错去%@",error.localizedDescription);
+                break;
         }
-        [fruits addObject:fruitsInCategory];
+        [self postNotification:kFruitsErrorNotification];
+    }else{
+        NSDictionary *directionary = [NSJSONSerialization JSONObjectWithData:data
+                                                                     options:NSJSONReadingMutableLeaves
+                                                                error:nil];
+        [[Model sharedModel] initModels:directionary];
+        [[Model sharedModel] updateCache:directionary];
+        [self postNotification:kFruitsSuccessNotification];
     }
-    for (NSDictionary *ad in dAds) {
-        FruitAds *fa = [[FruitAds alloc] init];
-        [fa setName:[ad objectForKey:@"name"]];
-        [fa setUrl:[ad objectForKey:@"url"]];
-        [ads addObject:fa];
-    }
-    [Model sharedModel].fruits = fruits;
-    [Model sharedModel].ads = ads;
-    [Model sharedModel].sections = sections;
-    [self postNotification:kFruitsSuccessNotification];
 }
 
 @end
